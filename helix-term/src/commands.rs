@@ -507,6 +507,8 @@ impl MappableCommand {
         command_palette, "Open command palette",
         goto_word, "Jump to a two-character label",
         extend_to_word, "Extend to a two-character label",
+        goto_chunk, "Jump to a two-character chunk label",
+        extend_to_chunk, "Extend to a two-character chunk label",
     );
 }
 
@@ -5821,11 +5823,19 @@ fn replay_macro(cx: &mut Context) {
 }
 
 fn goto_word(cx: &mut Context) {
-    jump_to_word(cx, Movement::Move)
+    jump_to_word(cx, Movement::Move, false)
 }
 
 fn extend_to_word(cx: &mut Context) {
-    jump_to_word(cx, Movement::Extend)
+    jump_to_word(cx, Movement::Extend, false)
+}
+
+fn goto_chunk(cx: &mut Context) {
+    jump_to_word(cx, Movement::Move, true)
+}
+
+fn extend_to_chunk(cx: &mut Context) {
+    jump_to_word(cx, Movement::Extend, true)
 }
 
 fn jump_to_label(cx: &mut Context, labels: Vec<Range>, behaviour: Movement) {
@@ -5909,7 +5919,7 @@ fn jump_to_label(cx: &mut Context, labels: Vec<Range>, behaviour: Movement) {
     });
 }
 
-fn jump_to_word(cx: &mut Context, behaviour: Movement) {
+fn jump_to_word(cx: &mut Context, behaviour: Movement, chunk: bool) {
     // Calculate the jump candidates: ranges for any visible words with two or
     // more characters.
     let alphabet = &cx.editor.config().jump_label_alphabet;
@@ -5928,12 +5938,20 @@ fn jump_to_word(cx: &mut Context, behaviour: Movement) {
     let mut cursor_fwd = Range::point(cursor);
     let mut cursor_rev = Range::point(cursor);
     if text.get_char(cursor).is_some_and(|c| !c.is_whitespace()) {
-        let cursor_word_end = movement::move_next_word_end(text, cursor_fwd, 1);
+        let cursor_word_end = if chunk {
+            movement::move_next_chunk_end(text, cursor_fwd, 1)
+        } else {
+            movement::move_next_word_end(text, cursor_fwd, 1)
+        };
         //  single grapheme words need a specical case
         if cursor_word_end.anchor == cursor {
             cursor_fwd = cursor_word_end;
         }
-        let cursor_word_start = movement::move_prev_word_start(text, cursor_rev, 1);
+        let cursor_word_start = if chunk {
+            movement::move_prev_chunk_start(text, cursor_rev, 1)
+        } else {
+            movement::move_prev_word_start(text, cursor_rev, 1)
+        };
         if cursor_word_start.anchor == next_grapheme_boundary(text, cursor) {
             cursor_rev = cursor_word_start;
         }
@@ -5941,7 +5959,11 @@ fn jump_to_word(cx: &mut Context, behaviour: Movement) {
     'outer: loop {
         let mut changed = false;
         while cursor_fwd.head < end {
-            cursor_fwd = movement::move_next_word_end(text, cursor_fwd, 1);
+            cursor_fwd = if chunk {
+                movement::move_next_chunk_end(text, cursor_fwd, 1)
+            } else {
+                movement::move_next_word_end(text, cursor_fwd, 1)
+            };
             // The cursor is on a word that is atleast two graphemes long and
             // madeup of word characters. The latter condition is needed because
             // move_next_word_end simply treats a sequence of characters from
@@ -5967,7 +5989,11 @@ fn jump_to_word(cx: &mut Context, behaviour: Movement) {
             break;
         }
         while cursor_rev.head > start {
-            cursor_rev = movement::move_prev_word_start(text, cursor_rev, 1);
+            cursor_rev = if chunk {
+                movement::move_prev_chunk_start(text, cursor_rev, 1)
+            } else {
+                movement::move_prev_word_start(text, cursor_rev, 1)
+            };
             // The cursor is on a word that is atleast two graphemes long and
             // madeup of word characters. The latter condition is needed because
             // move_prev_word_start simply treats a sequence of characters from

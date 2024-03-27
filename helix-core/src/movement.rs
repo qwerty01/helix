@@ -165,6 +165,22 @@ pub fn move_vertically(
     new_range
 }
 
+pub fn move_next_chunk_start(slice: RopeSlice, range: Range, count: usize) -> Range {
+    word_move(slice, range, count, WordMotionTarget::NextChunkStart)
+}
+
+pub fn move_next_chunk_end(slice: RopeSlice, range: Range, count: usize) -> Range {
+    word_move(slice, range, count, WordMotionTarget::NextChunkEnd)
+}
+
+pub fn move_prev_chunk_start(slice: RopeSlice, range: Range, count: usize) -> Range {
+    word_move(slice, range, count, WordMotionTarget::PrevChunkStart)
+}
+
+pub fn move_prev_chunk_end(slice: RopeSlice, range: Range, count: usize) -> Range {
+    word_move(slice, range, count, WordMotionTarget::PrevChunkEnd)
+}
+
 pub fn move_next_word_start(slice: RopeSlice, range: Range, count: usize) -> Range {
     word_move(slice, range, count, WordMotionTarget::NextWordStart)
 }
@@ -201,8 +217,10 @@ fn word_move(slice: RopeSlice, range: Range, count: usize, target: WordMotionTar
     let is_prev = matches!(
         target,
         WordMotionTarget::PrevWordStart
+            | WordMotionTarget::PrevChunkStart
             | WordMotionTarget::PrevLongWordStart
             | WordMotionTarget::PrevWordEnd
+            | WordMotionTarget::PrevChunkEnd
             | WordMotionTarget::PrevLongWordEnd
     );
 
@@ -372,6 +390,13 @@ where
 /// Possible targets of a word motion
 #[derive(Copy, Clone, Debug)]
 pub enum WordMotionTarget {
+    // Chunks are portions of words that are jump targets. For example, "TestWord"
+    // would only hit the start and end, but `Test` and `Word` would be separate chunks
+    NextChunkStart,
+    NextChunkEnd,
+    PrevChunkStart,
+    PrevChunkEnd,
+
     NextWordStart,
     NextWordEnd,
     PrevWordStart,
@@ -397,8 +422,10 @@ impl CharHelpers for Chars<'_> {
         let is_prev = matches!(
             target,
             WordMotionTarget::PrevWordStart
+                | WordMotionTarget::PrevChunkStart
                 | WordMotionTarget::PrevLongWordStart
                 | WordMotionTarget::PrevWordEnd
+                | WordMotionTarget::PrevChunkEnd
                 | WordMotionTarget::PrevLongWordEnd
         );
 
@@ -467,6 +494,12 @@ fn is_word_boundary(a: char, b: char) -> bool {
     categorize_char(a) != categorize_char(b)
 }
 
+fn is_chunk_boundary(a: char, b: char) -> bool {
+    categorize_char(a) != categorize_char(b)
+        || a.is_lowercase() && b.is_uppercase()
+        || a == '_' && b.is_alphanumeric()
+}
+
 fn is_long_word_boundary(a: char, b: char) -> bool {
     match (categorize_char(a), categorize_char(b)) {
         (CharCategory::Word, CharCategory::Punctuation)
@@ -478,6 +511,23 @@ fn is_long_word_boundary(a: char, b: char) -> bool {
 
 fn reached_target(target: WordMotionTarget, prev_ch: char, next_ch: char) -> bool {
     match target {
+        // Chunk boundaries aren't reversible
+        WordMotionTarget::NextChunkStart => {
+            is_chunk_boundary(prev_ch, next_ch)
+                && (char_is_line_ending(next_ch) || !next_ch.is_whitespace())
+        }
+        WordMotionTarget::NextChunkEnd => {
+            is_chunk_boundary(prev_ch, next_ch)
+                && (!prev_ch.is_whitespace() || char_is_line_ending(next_ch))
+        }
+        WordMotionTarget::PrevChunkStart => {
+            is_chunk_boundary(next_ch, prev_ch)
+                && (!prev_ch.is_whitespace() || char_is_line_ending(next_ch))
+        }
+        WordMotionTarget::PrevChunkEnd => {
+            is_chunk_boundary(next_ch, prev_ch)
+                && (char_is_line_ending(next_ch) || !next_ch.is_whitespace())
+        }
         WordMotionTarget::NextWordStart | WordMotionTarget::PrevWordEnd => {
             is_word_boundary(prev_ch, next_ch)
                 && (char_is_line_ending(next_ch) || !next_ch.is_whitespace())
