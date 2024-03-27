@@ -225,6 +225,7 @@ Jumps to various locations.
 | `j`   | Move down textual (instead of visual) line       | `move_line_down`           |
 | `k`   | Move up textual (instead of visual) line         | `move_line_up`             |
 | `w`   | Show labels at each word and select the word that belongs to the entered labels | `goto_word` |
+| `W`   | Show labels at each chunk and select the chunk that belongs to the entered labels | `goto_chunk` |
 
 #### Match mode
 
